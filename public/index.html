@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Venue Desk</title>
+<meta name="theme-color" content="#13303a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Venue Desk">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%227%22 fill=%22%2313303a%22/%3E%3Cpath d=%22M10 9h12M10 16h12M10 23h8%22 stroke=%22%23f0a23a%22 stroke-width=%223%22 stroke-linecap=%22round%22/%3E%3C/svg%3E">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Barlow+Condensed:wght@600;700&display=swap">
+<style>
+/* Layout: phone-first single column, sticky header with live counts, bottom tab bar, bottom-sheet editors */
+:root{
+  --bg:#eef2f3; --surface:#ffffff; --ink:#15232b; --muted:#566872; --line:#d6dfe3;
+  --head:#13303a; --head-ink:#f2f6f7; --accent:#c26f08; --accent-ink:#ffffff; --accent-soft:#fbeedb;
+  --s-new:#6b7b84; --s-new-bg:#e7ecef; --s-conf:#1f5fa8; --s-conf-bg:#e2edf9;
+  --s-prog:#9a5a00; --s-prog-bg:#fdf0d9; --s-done:#1d7a45; --s-done-bg:#e0f3e8;
+  --s-ver:#0d5a33; --s-ver-bg:#c9ead6; --s-blk:#b42318; --s-blk-bg:#fde5e3;
+  --s-drop:#7d8a91; --s-drop-bg:#eef1f3; --wa:#1f8f4e;
+  --font-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --font-body:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --nav-h:64px; color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#0e171b; --surface:#16232a; --ink:#e4ecef; --muted:#93a6af; --line:#2a3b43;
+  --head:#0a2128; --head-ink:#e9f1f3; --accent:#f0a23a; --accent-ink:#1b1206; --accent-soft:#3a2a12;
+  --s-new:#a7b5bc; --s-new-bg:#26343b; --s-conf:#8ab8f0; --s-conf-bg:#1c2f45;
+  --s-prog:#f2bd6b; --s-prog-bg:#3a2d16; --s-done:#79d29d; --s-done-bg:#183626;
+  --s-ver:#a6ecc1; --s-ver-bg:#1f4a31; --s-blk:#ff9086; --s-blk-bg:#46201d;
+  --s-drop:#7f9099; --s-drop-bg:#1f2b31; color-scheme:dark}}
+
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.45;padding-bottom:calc(var(--nav-h) + env(safe-area-inset-bottom,0px) + 80px)}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+[hidden]{display:none!important}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:680px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+
+header{position:sticky;top:0;z-index:5;background:var(--head);color:var(--head-ink);padding-top:env(safe-area-inset-top,0px)}
+header .wrap{padding-block:12px;display:grid;gap:10px}
+.toprow{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.titles{min-width:0}
+h1{font-family:var(--font-display);font-weight:700;font-size:24px;letter-spacing:.02em;text-transform:uppercase;margin:0;line-height:1.1}
+.event{font-size:13px;opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
+.hbtns{display:flex;gap:6px;flex:none}
+.hbtn{border:1px solid rgba(255,255,255,.25);background:transparent;color:inherit;border-radius:999px;padding:5px 11px;font-size:12.5px;font-weight:700;display:inline-flex;align-items:center;gap:5px}
+.hbtn svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.hbtn.spin svg{animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+.counts{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+.count{background:rgba(255,255,255,.07);border-radius:8px;padding:6px 4px;text-align:center;border:0;color:inherit}
+.count b{display:block;font-family:var(--font-display);font-size:22px;line-height:1;font-variant-numeric:tabular-nums}
+.count span{font-size:11px;text-transform:uppercase;letter-spacing:.06em;opacity:.75}
+.count.warn b{color:#ff9a8f}
+.syncnote{font-size:12px;opacity:.75}
+
+main .wrap{padding-block:14px;display:grid;gap:12px}
+.toolbar{display:grid;gap:8px}
+main .wrap>*,header .wrap>*,.count{min-width:0}
+.search select{width:0}
+.search{display:flex;gap:8px}
+.search input,.search select{flex:1;min-width:0;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.search select{flex:0 1 42%}
+.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+.chip{flex:none;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 12px;font-size:13px;white-space:nowrap}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.chip .n{opacity:.7;margin-left:4px;font-variant-numeric:tabular-nums}
+
+.grouphead{font-family:var(--font-display);font-weight:600;text-transform:uppercase;letter-spacing:.08em;font-size:14px;color:var(--muted);margin:6px 2px -4px}
+.list{display:grid;gap:8px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;display:grid;gap:6px;border-left-width:4px}
+.card[data-s="blocked"]{border-left-color:var(--s-blk)}.card[data-s="new"]{border-left-color:var(--s-new)}
+.card[data-s="confirmed"]{border-left-color:var(--s-conf)}.card[data-s="progress"]{border-left-color:var(--s-prog)}
+.card[data-s="done"]{border-left-color:var(--s-done)}.card[data-s="verified"]{border-left-color:var(--s-ver)}
+.card[data-s="dropped"]{border-left-color:var(--s-drop);opacity:.65}
+.card[data-s="dropped"] .item{text-decoration:line-through}
+.cardtop{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.dept{font-family:var(--font-display);font-weight:600;font-size:14px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item{font-weight:700;font-size:16px;overflow-wrap:anywhere;background:none;border:0;padding:0;text-align:left}
+.item:disabled{cursor:default;opacity:1}
+.meta{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:13px;color:var(--muted)}
+.meta .over{color:var(--s-blk);font-weight:700}
+.note{font-size:13px;background:var(--bg);border-radius:8px;padding:6px 8px;overflow-wrap:anywhere}
+.pill{appearance:none;-webkit-appearance:none;border:0;border-radius:999px;padding:5px 26px 5px 10px;font-size:12.5px;font-weight:700;flex:none;
+  background-image:linear-gradient(45deg,transparent 50%,currentColor 50%),linear-gradient(135deg,currentColor 50%,transparent 50%);
+  background-position:calc(100% - 13px) 55%,calc(100% - 9px) 55%;background-size:4px 4px;background-repeat:no-repeat}
+.pill:disabled{background-image:none;padding-right:10px;opacity:1}
+.pill.new{color:var(--s-new);background-color:var(--s-new-bg)}.pill.confirmed{color:var(--s-conf);background-color:var(--s-conf-bg)}
+.pill.progress{color:var(--s-prog);background-color:var(--s-prog-bg)}.pill.done{color:var(--s-done);background-color:var(--s-done-bg)}
+.pill.verified{color:var(--s-ver);background-color:var(--s-ver-bg)}.pill.blocked{color:var(--s-blk);background-color:var(--s-blk-bg)}
+.pill.dropped{color:var(--s-drop);background-color:var(--s-drop-bg)}
+.tag{font-size:11.5px;font-weight:700;border-radius:6px;padding:2px 7px;background:var(--accent-soft);color:var(--accent)}
+
+.empty{background:var(--surface);border:1px dashed var(--line);border-radius:12px;padding:20px;text-align:center;color:var(--muted)}
+.empty b{color:var(--ink);display:block;margin-bottom:4px}
+
+.team{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;display:grid;gap:8px}
+.team.home{border-color:var(--accent)}
+.teamtop{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.teamname{font-family:var(--font-display);font-weight:700;font-size:19px;text-transform:uppercase;letter-spacing:.03em;line-height:1.1}
+.lead{font-size:14px;color:var(--muted)}
+.lead .ph{font-variant-numeric:tabular-nums;user-select:all}
+.resp{font-size:12px;font-weight:700;border-radius:999px;padding:3px 9px;white-space:nowrap}
+.resp.pending{background:var(--s-prog-bg);color:var(--s-prog)}.resp.needs{background:var(--s-conf-bg);color:var(--s-conf)}
+.resp.none{background:var(--s-done-bg);color:var(--s-done)}.resp.home{background:var(--accent-soft);color:var(--accent)}
+.teamstats{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:13px;color:var(--muted)}
+.teamstats .stale{color:var(--s-blk);font-weight:700}
+.hints{font-size:12.5px;color:var(--muted);border-top:1px solid var(--line);padding-top:8px}
+.actions{display:flex;flex-wrap:wrap;gap:6px}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:9px;padding:8px 12px;font-size:13.5px;font-weight:700;text-decoration:none;color:var(--ink);display:inline-flex;align-items:center;gap:6px}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.wa{background:var(--wa);border-color:var(--wa);color:#fff}
+.btn.danger{color:var(--s-blk)}
+.btn:disabled{opacity:.5}
+
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px;display:grid;gap:10px}
+.panel h2{font-family:var(--font-display);font-size:18px;text-transform:uppercase;letter-spacing:.05em;margin:0}
+.panel p{margin:0;color:var(--muted);font-size:13.5px}
+pre.summary{white-space:pre-wrap;overflow-wrap:anywhere;margin:0;font-family:var(--font-body);font-size:14px;background:var(--bg);border-radius:10px;padding:12px;max-height:55vh;overflow:auto}
+.tbl{width:100%;border-collapse:collapse;font-size:13.5px;font-variant-numeric:tabular-nums}
+.tbl th,.tbl td{text-align:left;padding:6px 4px;border-bottom:1px solid var(--line)}
+.tbl th{font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
+.tbl td.n,.tbl th.n{text-align:right}
+.tblwrap{overflow-x:auto}
+
+.fab{position:fixed;right:calc(16px + env(safe-area-inset-right,0px));bottom:calc(var(--nav-h) + env(safe-area-inset-bottom,0px) + 14px);z-index:6;
+  background:var(--accent);color:var(--accent-ink);border:0;border-radius:16px;padding:14px 18px;font-weight:700;font-size:15px;box-shadow:0 6px 18px rgba(0,0,0,.22)}
+nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:7;background:var(--surface);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom,0px)}
+nav.tabs .in{max-width:680px;margin:0 auto;display:grid;grid-template-columns:repeat(3,1fr);height:var(--nav-h)}
+nav.tabs button{border:0;background:none;display:grid;place-items:center;align-content:center;gap:2px;font-size:12px;font-weight:700;color:var(--muted)}
+nav.tabs button svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+nav.tabs button[aria-current="page"]{color:var(--accent)}
+
+.sheet{position:fixed;inset:0;z-index:20;background:rgba(5,14,18,.5);display:flex;align-items:flex-end;justify-content:center}
+.sheet .box{background:var(--surface);width:100%;max-width:680px;max-height:92%;overflow:auto;border-radius:18px 18px 0 0;
+  padding:16px max(16px,env(safe-area-inset-right,0px)) calc(16px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px));display:grid;gap:12px}
+.sheet h3{margin:0;font-family:var(--font-display);font-size:20px;text-transform:uppercase;letter-spacing:.04em}
+.field{display:grid;gap:4px}
+.field label{font-size:12.5px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.field input,.field select,.field textarea{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.field textarea{min-height:70px;resize:vertical}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.row2>*{min-width:0}
+.check{display:flex;gap:8px;align-items:center;font-size:14px}
+.hintbox{font-size:12.5px;color:var(--muted);background:var(--accent-soft);border-radius:8px;padding:8px 10px}
+.sheetact{display:flex;gap:8px;justify-content:space-between;flex-wrap:wrap}
+.sheetact .r{display:flex;gap:8px;margin-left:auto}
+.err{color:var(--s-blk);font-size:13px}
+
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--nav-h) + env(safe-area-inset-bottom,0px) + 80px);z-index:30;
+  background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:14px;max-width:calc(100% - 32px)}
+#copyArea{position:fixed;left:-9999px;top:0;opacity:0}
+@media (max-width:380px){.counts span{font-size:10px}.row2{grid-template-columns:1fr}}
+@media (prefers-reduced-motion:no-preference){.sheet .box{animation:up .18s ease-out}@keyframes up{from{transform:translateY(24px);opacity:.6}}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="toprow">
+      <div class="titles"><h1>Venue Desk</h1><span class="event" id="eventName">Venue requirements</span></div>
+      <div class="hbtns">
+        <button class="hbtn" id="refreshBtn" type="button" aria-label="Refresh"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg></button>
+        <button class="hbtn" id="lockBtn" type="button"></button>
+      </div>
+    </div>
+    <div class="counts">
+      <button class="count" data-jump="open"><b id="cOpen">–</b><span>Open</span></button>
+      <button class="count warn" data-jump="blocked"><b id="cBlk">–</b><span>Blocked</span></button>
+      <button class="count warn" data-jump="overdue"><b id="cOver">–</b><span>Overdue</span></button>
+      <button class="count" data-jump="done"><b id="cDone">–</b><span>Done</span></button>
+      <button class="count" data-jump="teams"><b id="cPend">–</b><span>No reply</span></button>
+    </div>
+    <div class="syncnote" id="sync">Loading…</div>
+  </div>
+</header>
+
+<main><div class="wrap" id="view"></div></main>
+
+<button class="fab" id="fab" type="button">+ Requirement</button>
+
+<nav class="tabs" aria-label="Sections"><div class="in">
+  <button type="button" data-tab="reqs" aria-current="page"><svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg>Requirements</button>
+  <button type="button" data-tab="teams"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3 19c.6-3.2 3-5 6-5s5.4 1.8 6 5"/><circle cx="17" cy="9" r="2.4"/><path d="M16 14c2.6 0 4.4 1.5 5 4"/></svg>Teams</button>
+  <button type="button" data-tab="summary"><svg viewBox="0 0 24 24"><path d="M6 3h9l4 4v14H6z"/><path d="M9 11h7M9 15h7M9 7h4"/></svg>Summary</button>
+</div></nav>
+
+<div id="sheetHost"></div>
+<div class="toast" id="toast" hidden></div>
+<textarea id="copyArea" aria-hidden="true" tabindex="-1"></textarea>
+
+<script>
+(function(){
+const ST=[["new","New"],["confirmed","Confirmed"],["progress","In progress"],["done","Done"],["verified","Verified on-site"],["blocked","Blocked"],["dropped","Dropped"]];
+const SL=Object.fromEntries(ST);
+const OPEN=new Set(["new","confirmed","progress","blocked"]);
+const S={reqs:[],depts:[],settings:{},tab:"reqs",filter:"open",dept:"all",q:"",teamFilter:"all",loaded:false,pin:"",busy:0,fetchedAt:null};
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const digits=p=>String(p||"").replace(/\D/g,"");
+const firstName=n=>String(n||"").split(/\s+/)[0];
+const now=()=>new Date();
+const canEdit=()=>!!S.pin;
+
+/* ---------- storage (PIN stays on this phone only) ---------- */
+function loadPin(){try{return localStorage.getItem("venueDeskPin")||""}catch(e){return ""}}
+function savePin(p){try{p?localStorage.setItem("venueDeskPin",p):localStorage.removeItem("venueDeskPin")}catch(e){}}
+
+/* ---------- server calls ---------- */
+// Talks to /api/data on Vercel. Same call names as before: call("getData"), call("checkPin",pin), call(action,pin,...args)
+const ARGS={saveReq:["req"],setStatus:["id","status"],deleteReq:["id"],saveTeam:["team"],markContacted:["id"],saveSetting:["key","value"]};
+async function call(fn,...args){
+  let r;
+  if(fn==="getData")r=await fetch("/api/data",{cache:"no-store"});
+  else{
+    const body={action:fn,pin:args[0]};
+    (ARGS[fn]||[]).forEach((k,i)=>body[k]=args[i+1]);
+    r=await fetch("/api/data",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+  }
+  const j=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error(j.error||("HTTP "+r.status));
+  return fn==="checkPin"?!!j.ok:j;
+}
+function apply(data){
+  S.reqs=data.reqs||[];S.depts=data.teams||[];S.settings=data.settings||{};S.fetchedAt=new Date();S.loaded=true;
+  if(S.dept!=="all"&&!S.depts.some(d=>d.id===S.dept))S.dept="all";
+  safeRender();
+}
+async function refresh(quiet){
+  const b=$("#refreshBtn");b.classList.add("spin");
+  try{apply(await call("getData"))}
+  catch(e){if(!quiet)toast("Couldn't load. Check your connection.");$("#sync").textContent="Couldn't reach the sheet. Tap refresh to try again."}
+  finally{b.classList.remove("spin")}
+}
+async function write(fn,args,okMsg){
+  if(!canEdit()){toast("Unlock editing first");return false}
+  S.busy++;
+  try{apply(await call(fn,S.pin,...args));if(okMsg)toast(okMsg);return true}
+  catch(e){
+    const m=String(e&&e.message||e);
+    if(m.includes("PIN_INVALID")){S.pin="";savePin("");render();toast("PIN no longer valid. Unlock again.")}
+    else toast("Couldn't save. Try again.");
+    return false}
+  finally{S.busy--}
+}
+
+/* ---------- helpers ---------- */
+function dueDate(r){if(!r.neededBy)return null;const d=new Date(r.neededBy);return isNaN(d)?null:d}
+function isOver(r){const d=dueDate(r);return !!d&&d<now()&&OPEN.has(r.status)}
+function fmtDue(r){const d=dueDate(r);if(!d)return "No date";return d.toLocaleString(undefined,{weekday:"short",day:"numeric",month:"short",hour:"numeric",minute:"2-digit"})}
+function daysSince(iso){if(!iso)return null;const d=new Date(iso);if(isNaN(d))return null;const a=new Date(d.getFullYear(),d.getMonth(),d.getDate()),b=new Date();b.setHours(0,0,0,0);return Math.round((b-a)/864e5)}
+function ago(iso){const n=daysSince(iso);if(n===null)return "Never contacted";if(n<=0)return "Contacted today";if(n===1)return "Contacted yesterday";return "Contacted "+n+" days ago"}
+function deptById(id){return S.depts.find(d=>d.id===id)}
+function deptName(id){return deptById(id)?.name||id||"—"}
+function homeDept(){return S.depts.find(d=>d.home)}
+function reqsOf(id){return S.reqs.filter(r=>r.dept===id)}
+function respOf(d){if(d.home)return "home";if(reqsOf(d.id).some(r=>r.status!=="dropped"))return "needs";return d.response||"pending"}
+const RESP_L={pending:"Not replied",needs:"Has needs",none:"No needs",home:"Your team"};
+function stale(d){return !d.home&&(daysSince(d.lastContact)??99)>=7}
+function toast(m){const t=$("#toast");t.textContent=m;t.hidden=false;clearTimeout(toast._t);toast._t=setTimeout(()=>t.hidden=true,2400)}
+async function copy(text){
+  try{await navigator.clipboard.writeText(text);toast("Copied");return true}catch(e){}
+  try{const a=$("#copyArea");a.value=text;a.select();a.setSelectionRange(0,text.length);if(document.execCommand("copy")){toast("Copied");return true}}catch(e){}
+  toast("Couldn't copy. Long-press the text to copy it.");return false;
+}
+function waLink(phone,text){return "https://wa.me/"+digits(phone)+(text?"?text="+encodeURIComponent(text):"")}
+function eventName(){return (S.settings.eventName||"").trim()}
+
+/* ---------- header ---------- */
+function renderHeader(){
+  const r=S.reqs;
+  $("#cOpen").textContent=S.loaded?r.filter(x=>OPEN.has(x.status)).length:"–";
+  $("#cBlk").textContent=S.loaded?r.filter(x=>x.status==="blocked").length:"–";
+  $("#cOver").textContent=S.loaded?r.filter(isOver).length:"–";
+  $("#cDone").textContent=S.loaded?r.filter(x=>x.status==="done"||x.status==="verified").length:"–";
+  $("#cPend").textContent=S.loaded?S.depts.filter(d=>respOf(d)==="pending").length:"–";
+  $("#eventName").textContent=eventName()||"Venue requirements";
+  if(S.fetchedAt)$("#sync").textContent="Updated "+S.fetchedAt.toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"})+(canEdit()?"":" · View only");
+  const lb=$("#lockBtn");
+  lb.innerHTML=canEdit()
+    ?`<svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.5-2"/></svg>Editing`
+    :`<svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Unlock`;
+  $("#fab").hidden=!canEdit()||S.tab==="summary";
+}
+
+/* ---------- requirements ---------- */
+const FILTERS=[["open","Open",x=>OPEN.has(x.status)],["blocked","Blocked",x=>x.status==="blocked"],["overdue","Overdue",isOver],["new","New",x=>x.status==="new"],["done","Done",x=>x.status==="done"||x.status==="verified"],["all","All",()=>true]];
+function filteredReqs(){
+  const f=FILTERS.find(x=>x[0]===S.filter)[2];const q=S.q.trim().toLowerCase();
+  return S.reqs.filter(f).filter(r=>S.dept==="all"||r.dept===S.dept)
+    .filter(r=>!q||[r.item,r.qty,r.location,r.owner,r.notes,deptName(r.dept)].join(" ").toLowerCase().includes(q))
+    .sort((a,b)=>{const da=dueDate(a),db=dueDate(b);if(da&&db)return da-db;if(da)return -1;if(db)return 1;return String(a.created).localeCompare(String(b.created))});
+}
+function statusSelect(r){return `<select class="pill ${r.status}" data-status="${esc(r.id)}" aria-label="Status"${canEdit()?"":" disabled"}>${ST.map(([v,l])=>`<option value="${v}"${v===r.status?" selected":""}>${l}</option>`).join("")}</select>`}
+function reqCard(r){
+  const over=isOver(r);
+  return `<article class="card" data-s="${esc(r.status)}">
+    <div class="cardtop"><span class="dept">${esc(deptName(r.dept))}</span>${statusSelect(r)}</div>
+    <button class="item" data-edit="${esc(r.id)}"${canEdit()?"":" disabled"}>${esc(r.item)}${r.qty?` <span style="font-weight:400;color:var(--muted)">× ${esc(r.qty)}</span>`:""}</button>
+    <div class="meta">
+      <span class="${over?"over":""}">${over?"Overdue · ":""}${esc(fmtDue(r))}</span>
+      ${r.location?`<span>${esc(r.location)}</span>`:""}
+      ${r.owner?`<span>Owner: ${esc(r.owner)}</span>`:`<span style="color:var(--s-prog)">No owner</span>`}
+      ${r.budget?`<span class="tag">Needs budget</span>`:""}
+    </div>
+    ${r.notes?`<div class="note">${esc(r.notes)}</div>`:""}
+  </article>`;
+}
+function renderReqs(){
+  const list=filteredReqs();
+  const counts=Object.fromEntries(FILTERS.map(([k,,fn])=>[k,S.reqs.filter(fn).filter(r=>S.dept==="all"||r.dept===S.dept).length]));
+  let body="";
+  if(!S.loaded)body=`<div class="empty"><b>Loading requirements…</b>Fetching the latest list.</div>`;
+  else if(!S.reqs.length)body=`<div class="empty"><b>No requirements yet</b>${canEdit()?"When a team lead tells you what they need, tap <b>+ Requirement</b> and log it. Use the Teams tab to message each lead.":"Requirements will appear here once the venue team logs them."}</div>`;
+  else if(!list.length)body=`<div class="empty"><b>Nothing matches</b>Try another filter or team.</div>`;
+  else{
+    const groups=new Map();
+    for(const r of list){const d=dueDate(r);const k=d?d.toLocaleDateString(undefined,{weekday:"long",day:"numeric",month:"short"}):"No date set";if(!groups.has(k))groups.set(k,[]);groups.get(k).push(r)}
+    for(const [k,arr] of groups)body+=`<div class="grouphead">${esc(k)}</div><div class="list">${arr.map(reqCard).join("")}</div>`;
+  }
+  $("#view").innerHTML=`<div class="toolbar">
+      <div class="search"><input id="q" type="search" placeholder="Search item, place, owner" value="${esc(S.q)}" aria-label="Search">
+      <select id="deptFilter" aria-label="Team"><option value="all">All teams</option>${S.depts.map(d=>`<option value="${esc(d.id)}"${S.dept===d.id?" selected":""}>${esc(d.name)}</option>`).join("")}</select></div>
+      <div class="chips">${FILTERS.map(([k,l])=>`<button class="chip" data-filter="${k}" aria-pressed="${S.filter===k}">${l}<span class="n">${counts[k]}</span></button>`).join("")}</div>
+    </div>${body}`;
+  const q=$("#q");q.addEventListener("input",()=>{S.q=q.value;const pos=q.selectionStart;renderReqs();const nq=$("#q");nq.focus();try{nq.setSelectionRange(pos,pos)}catch(e){}});
+  $("#deptFilter").addEventListener("change",e=>{S.dept=e.target.value;renderReqs()});
+}
+
+/* ---------- teams ---------- */
+const TFILTERS=[["all","All"],["pending","Not replied"],["needs","Has needs"],["none","No needs"],["stale","Not contacted 7+ days"]];
+function askText(d){
+  const ev=eventName()?` for ${eventName()}`:"";
+  return `Assalamualaikum Wa Rahmatullah ${firstName(d.lead)},\nThis is the Venue team. I'm collecting venue requirements${ev} from all teams. Please share:\n1. What you need (items, power points, tables/chairs, space, AV, signage, water etc.)\n2. Quantity and where in the venue\n3. When it should be set up, and when it can be cleared\n4. Your contact person on the event day\nIf your team needs nothing at the venue, please reply "none". Thank you!`;
+}
+function followText(d){
+  const rs=reqsOf(d.id).filter(r=>r.status!=="dropped");
+  const lines=rs.map((r,i)=>`${i+1}. ${r.item}${r.qty?` × ${r.qty}`:""}${r.location?` (${r.location})`:""}: ${SL[r.status]}`);
+  return `Assalamualaikum Wa Rahmatullah ${firstName(d.lead)},\nQuick check from the Venue team. This is what I have for ${d.name}:\n${lines.join("\n")||"(nothing yet)"}\nAny new or changed venue requirements? Please let me know.`;
+}
+function msgFor(d){return reqsOf(d.id).length?followText(d):askText(d)}
+function renderTeams(){
+  let ds=S.depts.slice();
+  if(S.teamFilter==="stale")ds=ds.filter(stale);else if(S.teamFilter!=="all")ds=ds.filter(d=>respOf(d)===S.teamFilter);
+  const c=k=>k==="all"?S.depts.length:k==="stale"?S.depts.filter(stale).length:S.depts.filter(d=>respOf(d)===k).length;
+  let body="";
+  if(!S.loaded)body=`<div class="empty"><b>Loading teams…</b></div>`;
+  else if(!S.depts.length)body=`<div class="empty"><b>No teams found</b>Check that storage is connected in Vercel.</div>`;
+  else if(!ds.length)body=`<div class="empty"><b>No teams in this filter</b></div>`;
+  else body=`<div class="list">${ds.map(d=>{
+    const rs=reqsOf(d.id),open=rs.filter(r=>OPEN.has(r.status)).length,blk=rs.filter(r=>r.status==="blocked").length,resp=respOf(d);
+    return `<article class="team${d.home?" home":""}">
+      <div class="teamtop"><div style="min-width:0"><div class="teamname">${esc(d.name)}</div>
+        <div class="lead">${esc(d.lead)} · <span class="ph">${esc(d.phone)}</span></div></div>
+        <span class="resp ${resp}">${RESP_L[resp]}</span></div>
+      <div class="teamstats"><span>${rs.length} logged</span><span>${open} open</span>${blk?`<span class="stale">${blk} blocked</span>`:""}${d.home?"":`<span class="${stale(d)?"stale":""}">${ago(d.lastContact)}</span>`}</div>
+      ${d.note?`<div class="note">${esc(d.note)}</div>`:""}
+      ${canEdit()?`<div class="actions">
+        ${d.home?"":`<a class="btn wa" href="${esc(waLink(d.phone,msgFor(d)))}" target="_blank" rel="noopener" data-contacted="${esc(d.id)}">${rs.length?"Follow up":"Ask"} on WhatsApp</a>
+        <button class="btn" data-copymsg="${esc(d.id)}">Copy message</button>
+        <button class="btn" data-mark="${esc(d.id)}">Contacted today</button>`}
+        <button class="btn" data-addfor="${esc(d.id)}">+ Add</button>
+        <button class="btn" data-editteam="${esc(d.id)}">Edit</button>
+      </div>`:""}
+      ${d.hints&&canEdit()?`<div class="hints">Ask about: ${esc(d.hints)}</div>`:""}
+    </article>`}).join("")}</div>`;
+  $("#view").innerHTML=`<div class="toolbar"><div class="chips">${TFILTERS.map(([k,l])=>`<button class="chip" data-tfilter="${k}" aria-pressed="${S.teamFilter===k}">${l}<span class="n">${c(k)}</span></button>`).join("")}</div></div>${body}`;
+}
+
+/* ---------- summary ---------- */
+function summaryText(){
+  const r=S.reqs,live=r.filter(x=>x.status!=="dropped");
+  const d=new Date().toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"});
+  const n=s=>r.filter(x=>x.status===s).length;const L=[];
+  const h=homeDept();L.push(`Assalamualaikum Wa Rahmatullah${h?" "+firstName(h.lead):""},`);L.push("");
+  L.push(`*Venue requirements${eventName()?" – "+eventName():""}*`);L.push(`Update: ${d}`);L.push("");
+  L.push(`Total: ${live.length} | Open: ${r.filter(x=>OPEN.has(x.status)).length} | Blocked: ${n("blocked")} | Done: ${n("done")} | Verified on-site: ${n("verified")}`);
+  const pend=S.depts.filter(x=>respOf(x)==="pending").map(x=>x.name);
+  L.push(`Teams yet to reply: ${pend.length?pend.join(", "):"none"}`);
+  const blk=r.filter(x=>x.status==="blocked");
+  if(blk.length){L.push("");L.push("*Blocked / needs decision*");blk.forEach(x=>L.push(`- ${deptName(x.dept)}: ${x.item}${x.qty?" × "+x.qty:""}${x.notes?" ("+x.notes+")":""}`))}
+  const over=r.filter(isOver).filter(x=>x.status!=="blocked");
+  if(over.length){L.push("");L.push("*Overdue*");over.forEach(x=>L.push(`- ${deptName(x.dept)}: ${x.item} (was due ${fmtDue(x)})${x.owner?" – "+x.owner:""}`))}
+  const soon=r.filter(x=>{const dd=dueDate(x);return dd&&OPEN.has(x.status)&&dd>=now()&&dd-now()<48*36e5});
+  if(soon.length){L.push("");L.push("*Due in next 48 hours*");soon.forEach(x=>L.push(`- ${deptName(x.dept)}: ${x.item} – ${fmtDue(x)}${x.owner?" – "+x.owner:" – no owner"}`))}
+  const bud=r.filter(x=>x.budget&&OPEN.has(x.status));
+  if(bud.length){L.push("");L.push("*Waiting on budget*");bud.forEach(x=>L.push(`- ${deptName(x.dept)}: ${x.item}`))}
+  const noOwner=r.filter(x=>OPEN.has(x.status)&&!x.owner).length;
+  if(noOwner){L.push("");L.push(`${noOwner} open item${noOwner>1?"s have":" has"} no owner yet.`)}
+  const since=S.settings.lastSummaryAt;
+  if(since){const nw=r.filter(x=>x.created&&x.created>since);L.push("");
+    L.push(`New since last update: ${nw.length}${nw.length?" ("+Object.entries(nw.reduce((a,x)=>{a[deptName(x.dept)]=(a[deptName(x.dept)]||0)+1;return a},{})).map(([k,v])=>k+" +"+v).join(", ")+")":""}`)}
+  return L.join("\n");
+}
+function reportText(withClosed){
+  const d=new Date().toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"});
+  const h=homeDept(),L=[];
+  L.push(`Assalamualaikum Wa Rahmatullah${h?" "+firstName(h.lead):""},`);L.push("");
+  L.push(`*Detailed venue requirements${eventName()?" – "+eventName():""}*`);
+  L.push(`As of ${d}${withClosed?"":" (open items only)"}`);
+  const keep=r=>withClosed?true:OPEN.has(r.status);let total=0;
+  for(const dp of S.depts){
+    const rs=reqsOf(dp.id).filter(keep).sort((a,b)=>{const x=dueDate(a),y=dueDate(b);if(x&&y)return x-y;if(x)return -1;if(y)return 1;return 0});
+    if(!rs.length)continue;total+=rs.length;
+    L.push("");L.push(`*${dp.name.toUpperCase()}* (${dp.lead})`);
+    rs.forEach((r,i)=>{
+      L.push(`${i+1}. ${r.item}${r.qty?" × "+r.qty:""} – ${SL[r.status]}${isOver(r)?" (OVERDUE)":""}`);
+      const bits=[];if(r.location)bits.push("Where: "+r.location);bits.push("By: "+fmtDue(r));bits.push("Owner: "+(r.owner||"not assigned"));
+      L.push("   "+bits.join(" | "));
+      if(r.budget)L.push("   Needs budget approval");
+      if(r.notes)L.push("   Note: "+r.notes);
+    });
+  }
+  if(!total){L.push("");L.push(withClosed?"No requirements logged yet.":"No open requirements.")}
+  const none=S.depts.filter(x=>respOf(x)==="none").map(x=>x.name),pend=S.depts.filter(x=>respOf(x)==="pending").map(x=>x.name);
+  if(none.length||pend.length)L.push("");
+  if(none.length)L.push(`No venue needs: ${none.join(", ")}`);
+  if(pend.length)L.push(`Yet to reply: ${pend.join(", ")}`);
+  return L.join("\n");
+}
+function renderSummary(){
+  const txt=summaryText(),home=homeDept(),rep=reportText(S.repClosed);
+  const rows=S.depts.map(d=>{const rs=reqsOf(d.id).filter(r=>r.status!=="dropped");return {d,t:rs.length,o:rs.filter(r=>OPEN.has(r.status)).length,b:rs.filter(r=>r.status==="blocked").length,v:rs.filter(r=>r.status==="done"||r.status==="verified").length}});
+  const last=S.settings.lastSummaryAt?new Date(S.settings.lastSummaryAt).toLocaleString(undefined,{day:"numeric",month:"short",hour:"numeric",minute:"2-digit"}):"never";
+  $("#view").innerHTML=`
+  <section class="panel">
+    <h2>Update for team lead</h2>
+    <p>Built from the tracker. Last marked as sent: ${esc(last)}.</p>
+    <pre class="summary">${esc(txt)}</pre>
+    <div class="actions">
+      ${home&&canEdit()?`<a class="btn wa" href="${esc(waLink(home.phone,txt))}" target="_blank" rel="noopener">Send to ${esc(firstName(home.lead))} on WhatsApp</a>`:""}
+      <button class="btn" id="copySum">Copy</button>
+      ${canEdit()?`<button class="btn primary" id="markSent">Mark as sent</button>`:""}
+    </div>
+  </section>
+  <section class="panel">
+    <h2>Detailed report</h2>
+    <p>Every requirement grouped by team, with place, time, owner and notes.</p>
+    <label class="check"><input type="checkbox" id="repClosed"${S.repClosed?" checked":""}> Include done, verified and dropped items</label>
+    <pre class="summary">${esc(rep)}</pre>
+    <div class="actions">
+      ${home&&canEdit()?`<a class="btn wa" href="${esc(waLink(home.phone,rep))}" target="_blank" rel="noopener">Send report to ${esc(firstName(home.lead))}</a>`:""}
+      <button class="btn" id="copyRep">Copy</button>
+    </div>
+  </section>
+  <section class="panel">
+    <h2>By team</h2>
+    <div class="tblwrap"><table class="tbl"><thead><tr><th>Team</th><th class="n">Total</th><th class="n">Open</th><th class="n">Blocked</th><th class="n">Done</th></tr></thead>
+    <tbody>${rows.map(x=>`<tr><td>${esc(x.d.name)}${respOf(x.d)==="pending"?` <span class="resp pending">No reply</span>`:""}</td><td class="n">${x.t}</td><td class="n">${x.o}</td><td class="n" style="${x.b?"color:var(--s-blk);font-weight:700":""}">${x.b}</td><td class="n">${x.v}</td></tr>`).join("")}</tbody></table></div>
+  </section>
+  ${canEdit()?`<section class="panel">
+    <h2>Event</h2>
+    <div class="field"><label for="evName">Event name (used in messages)</label><input id="evName" value="${esc(S.settings.eventName||"")}" placeholder="e.g. Annual Conference 2026"></div>
+    <div class="actions"><button class="btn" id="saveEv">Save name</button></div>
+  </section>`:""}`;
+}
+
+/* ---------- render ---------- */
+function render(){
+  renderHeader();
+  document.querySelectorAll("nav.tabs button").forEach(b=>b.setAttribute("aria-current",b.dataset.tab===S.tab?"page":"false"));
+  if(S.tab==="reqs")renderReqs();else if(S.tab==="teams")renderTeams();else renderSummary();
+}
+function safeRender(){
+  // Don't redraw under an open form or while typing in search
+  if($("#sheetHost").innerHTML||(document.activeElement&&document.activeElement.id==="q")||(document.activeElement&&document.activeElement.id==="evName"))renderHeader();
+  else render();
+}
+
+/* ---------- sheets (forms) ---------- */
+function closeSheet(){$("#sheetHost").innerHTML="";render()}
+function bindClose(){$("#cancel").onclick=closeSheet;$("#sh").addEventListener("click",e=>{if(e.target.id==="sh")closeSheet()})}
+function openReqSheet(r,presetDept){
+  const isNew=!r;r=r||{dept:presetDept||(S.dept!=="all"?S.dept:""),status:"new"};
+  const opts=S.depts.map(d=>`<option value="${esc(d.id)}"${r.dept===d.id?" selected":""}>${esc(d.name)}</option>`).join("");
+  $("#sheetHost").innerHTML=`<div class="sheet" id="sh"><form class="box" id="reqForm" autocomplete="off">
+    <h3>${isNew?"New requirement":"Edit requirement"}</h3>
+    <div class="field"><label for="f-dept">Team</label><select id="f-dept" required><option value="">Choose team</option>${opts}</select></div>
+    <div class="hintbox" id="f-hint" hidden></div>
+    <div class="field"><label for="f-item">What is needed</label><input id="f-item" required value="${esc(r.item||"")}" placeholder="e.g. Power extension boards"></div>
+    <div class="row2"><div class="field"><label for="f-qty">Quantity / spec</label><input id="f-qty" value="${esc(r.qty||"")}" placeholder="e.g. 4, 6-socket"></div>
+      <div class="field"><label for="f-loc">Where</label><input id="f-loc" value="${esc(r.location||"")}" placeholder="e.g. Registration desk"></div></div>
+    <div class="row2"><div class="field"><label for="f-due">Needed by</label><input id="f-due" type="datetime-local" value="${esc(r.neededBy||"")}"></div>
+      <div class="field"><label for="f-owner">Owner (venue team)</label><input id="f-owner" value="${esc(r.owner||"")}" placeholder="Who will arrange it"></div></div>
+    <div class="field"><label for="f-status">Status</label><select id="f-status">${ST.map(([v,l])=>`<option value="${v}"${v===r.status?" selected":""}>${l}</option>`).join("")}</select></div>
+    <label class="check"><input type="checkbox" id="f-budget"${r.budget?" checked":""}> Needs budget approval from Finance</label>
+    <div class="field"><label for="f-notes">Notes / blockers</label><textarea id="f-notes" placeholder="Anything the owner should know">${esc(r.notes||"")}</textarea></div>
+    <div class="sheetact">${isNew?"":`<button type="button" class="btn danger" id="delReq">Delete</button>`}
+      <div class="r"><button type="button" class="btn" id="cancel">Cancel</button><button class="btn primary" type="submit" id="saveBtn">${isNew?"Add":"Save"}</button></div></div>
+  </form></div>`;
+  const showHint=()=>{const d=deptById($("#f-dept").value);const h=$("#f-hint");if(d&&d.hints){h.textContent="Common needs: "+d.hints;h.hidden=false}else h.hidden=true};
+  showHint();$("#f-dept").addEventListener("change",showHint);bindClose();
+  if(!isNew){let armed=false;$("#delReq").onclick=async e=>{if(!armed){armed=true;e.target.textContent="Tap again to delete";return}
+    e.target.disabled=true;if(await write("deleteReq",[r.id],"Deleted"))closeSheet();else e.target.disabled=false}}
+  $("#reqForm").addEventListener("submit",async e=>{e.preventDefault();
+    const body={id:isNew?"":r.id,dept:$("#f-dept").value,item:$("#f-item").value.trim(),qty:$("#f-qty").value.trim(),location:$("#f-loc").value.trim(),
+      neededBy:$("#f-due").value,owner:$("#f-owner").value.trim(),status:$("#f-status").value,budget:$("#f-budget").checked,notes:$("#f-notes").value.trim()};
+    if(!body.dept||!body.item)return;
+    const b=$("#saveBtn");b.disabled=true;b.textContent="Saving…";
+    if(await write("saveReq",[body],isNew?"Added":"Saved"))closeSheet();else{b.disabled=false;b.textContent=isNew?"Add":"Save"}
+  });
+  if(isNew)setTimeout(()=>($("#f-dept").value?$("#f-item"):$("#f-dept")).focus(),50);
+}
+function openTeamSheet(d){
+  $("#sheetHost").innerHTML=`<div class="sheet" id="sh"><form class="box" id="tForm">
+    <h3>${esc(d.name)}</h3>
+    <div class="row2"><div class="field"><label for="t-lead">Team lead</label><input id="t-lead" value="${esc(d.lead)}"></div>
+      <div class="field"><label for="t-phone">Phone</label><input id="t-phone" inputmode="tel" value="${esc(d.phone)}"></div></div>
+    ${d.home?"":`<div class="field"><label for="t-resp">Reply status</label><select id="t-resp">
+      <option value="pending"${d.response==="pending"?" selected":""}>Not replied yet</option>
+      <option value="needs"${d.response==="needs"?" selected":""}>Has venue needs</option>
+      <option value="none"${d.response==="none"?" selected":""}>No venue needs</option></select></div>
+    <div class="field"><label for="t-last">Last contacted</label><input id="t-last" type="date" value="${esc(d.lastContact?localDate(d.lastContact):"")}"></div>`}
+    <div class="field"><label for="t-note">Note</label><textarea id="t-note" placeholder="e.g. Will confirm stage size after Friday meeting">${esc(d.note||"")}</textarea></div>
+    <div class="field"><label for="t-hints">Things to ask about</label><textarea id="t-hints">${esc(d.hints||"")}</textarea></div>
+    <div class="sheetact"><div class="r"><button type="button" class="btn" id="cancel">Cancel</button><button class="btn primary" type="submit" id="saveBtn">Save</button></div></div>
+  </form></div>`;
+  bindClose();
+  $("#tForm").addEventListener("submit",async e=>{e.preventDefault();
+    const body={id:d.id,home:d.home,lead:$("#t-lead").value.trim(),phone:$("#t-phone").value.trim(),note:$("#t-note").value.trim(),hints:$("#t-hints").value.trim()};
+    if(!d.home){body.response=$("#t-resp").value;body.lastContact=$("#t-last").value}
+    const b=$("#saveBtn");b.disabled=true;b.textContent="Saving…";
+    if(await write("saveTeam",[body],"Saved"))closeSheet();else{b.disabled=false;b.textContent="Save"}
+  });
+}
+function localDate(iso){const d=new Date(iso);if(isNaN(d))return "";return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
+function openUnlock(){
+  if(canEdit()){
+    $("#sheetHost").innerHTML=`<div class="sheet" id="sh"><div class="box"><h3>Editing is on</h3>
+      <p style="margin:0;color:var(--muted)">This phone can add and change requirements. Lock it if you're handing the phone to someone else.</p>
+      <div class="sheetact"><div class="r"><button type="button" class="btn" id="cancel">Close</button><button type="button" class="btn primary" id="lockNow">Lock this phone</button></div></div></div></div>`;
+    bindClose();$("#lockNow").onclick=()=>{S.pin="";savePin("");closeSheet();toast("Locked. View only.")};return;
+  }
+  $("#sheetHost").innerHTML=`<div class="sheet" id="sh"><form class="box" id="pinForm">
+    <h3>Unlock editing</h3>
+    <p style="margin:0;color:var(--muted)">Enter the edit PIN you set in Vercel (EDIT_PIN). This phone will remember it.</p>
+    <div class="field"><label for="pin">Edit PIN</label><input id="pin" inputmode="numeric" autocomplete="off" required></div>
+    <div class="err" id="pinErr" hidden>That PIN didn't match. Check EDIT_PIN in your Vercel project settings.</div>
+    <div class="sheetact"><div class="r"><button type="button" class="btn" id="cancel">Cancel</button><button class="btn primary" type="submit" id="pinBtn">Unlock</button></div></div>
+  </form></div>`;
+  bindClose();setTimeout(()=>$("#pin").focus(),50);
+  $("#pinForm").addEventListener("submit",async e=>{e.preventDefault();
+    const p=$("#pin").value.trim(),b=$("#pinBtn");b.disabled=true;
+    try{if(await call("checkPin",p)){S.pin=p;savePin(p);closeSheet();toast("Editing unlocked")}else{$("#pinErr").hidden=false;b.disabled=false}}
+    catch(err){toast("Couldn't check the PIN. Try again.");b.disabled=false}
+  });
+}
+
+/* ---------- events ---------- */
+document.addEventListener("click",async e=>{
+  const t=e.target.closest("[data-tab],[data-filter],[data-tfilter],[data-edit],[data-copymsg],[data-mark],[data-addfor],[data-editteam],[data-jump],[data-contacted],#copySum,#copyRep,#markSent,#saveEv,#lockBtn,#refreshBtn");
+  if(!t)return;
+  if(t.dataset.tab){S.tab=t.dataset.tab;render();scrollTo(0,0);return}
+  if(t.dataset.filter){S.filter=t.dataset.filter;renderReqs();return}
+  if(t.dataset.tfilter){S.teamFilter=t.dataset.tfilter;renderTeams();return}
+  if(t.dataset.jump){if(t.dataset.jump==="teams"){S.tab="teams";S.teamFilter="pending"}else{S.tab="reqs";S.filter=t.dataset.jump}render();scrollTo(0,0);return}
+  if(t.id==="lockBtn"){openUnlock();return}
+  if(t.id==="refreshBtn"){refresh(false);return}
+  if(t.dataset.edit){const r=S.reqs.find(x=>x.id===t.dataset.edit);if(r&&canEdit())openReqSheet(r);return}
+  if(t.dataset.copymsg){const d=deptById(t.dataset.copymsg);if(d&&await copy(msgFor(d)))write("markContacted",[d.id]);return}
+  if(t.dataset.contacted){write("markContacted",[t.dataset.contacted]);return}
+  if(t.dataset.mark){write("markContacted",[t.dataset.mark],"Marked as contacted today");return}
+  if(t.dataset.addfor){openReqSheet(null,t.dataset.addfor);return}
+  if(t.dataset.editteam){const d=deptById(t.dataset.editteam);if(d)openTeamSheet(d);return}
+  if(t.id==="copySum"){copy(summaryText());return}
+  if(t.id==="copyRep"){copy(reportText(S.repClosed));return}
+  if(t.id==="markSent"){write("saveSetting",["lastSummaryAt",new Date().toISOString()],"Marked as sent");return}
+  if(t.id==="saveEv"){const v=$("#evName").value.trim();$("#evName").blur();write("saveSetting",["eventName",v],"Saved");return}
+});
+document.addEventListener("change",e=>{
+  if(e.target.id==="repClosed"){S.repClosed=e.target.checked;renderSummary();return}
+  const s=e.target.closest("[data-status]");if(!s)return;
+  const id=s.dataset.status,v=s.value;s.className="pill "+v;
+  const r=S.reqs.find(x=>x.id===id);if(r)r.status=v;
+  write("setStatus",[id,v],"Status: "+SL[v]);
+});
+$("#fab").addEventListener("click",()=>openReqSheet(null));
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&$("#sheetHost").innerHTML)closeSheet()});
+
+/* ---------- start ---------- */
+S.pin=loadPin();
+render();
+refresh(true);
+// Pick up teammates' changes: every minute while open, and whenever you come back to the app
+setInterval(()=>{if(document.visibilityState==="visible"&&!S.busy&&!$("#sheetHost").innerHTML)refresh(true)},60000);
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&!S.busy)refresh(true)});
+})();
+</script>
+</body>
+</html>

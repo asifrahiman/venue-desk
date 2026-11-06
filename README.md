@@ -21,5 +21,4 @@ Anyone with the link can view the app. Making changes needs the edit PIN, which 
 
 - **Change the PIN:** edit `EDIT_PIN` in Vercel, then redeploy. Phones using the old PIN go back to view-only.
 - **Change the app:** edit the files on GitHub. Vercel redeploys on its own after each commit.
-- **Re-import from the Claude version:** this only works while the database is empty. Replace `lib/seed.js` with a fresh export, then clear the data from the Upstash console (Data Browser → delete the `vd:reqs`, `vd:teams` and `vd:settings` keys) and reload the app.
-# venue-desk
+- **Re-import from the Claude version:** this only works while the database is empty. Replace `lib/seed.js` with a fresh export, then clear the data from the Upstash console (Data Browser → delete the `vd:reqs`, `vd:teams` and `vd:settings` keys) and reload the app. 
