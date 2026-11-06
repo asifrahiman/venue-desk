@@ -14,7 +14,7 @@ const url = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
 const token = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
 const redis = url && token ? new Redis({ url, token }) : null;
 
-const K = { reqs: 'vd:reqs', teams: 'vd:teams', settings: 'vd:settings' };
+const K = { reqs: 'vd:reqs', teams: 'vd:teams', settings: 'vd:settings', version: 'vd:version' };
 const STATUSES = ['new', 'confirmed', 'progress', 'done', 'verified', 'blocked', 'dropped'];
 const REPLIES = ['pending', 'needs', 'none'];
 
@@ -30,12 +30,16 @@ async function ensureSeeded() {
   if (seed.reqs.length) p.hset(K.reqs, Object.fromEntries(seed.reqs.map((r) => [r.id, JSON.stringify(r)])));
   const s = Object.fromEntries(Object.entries(seed.settings || {}).filter(([, v]) => v !== '' && v != null));
   if (Object.keys(s).length) p.hset(K.settings, s);
+  p.incr(K.version);
   await p.exec();
 }
 
 async function readAll() {
-  const [r, t, s] = await Promise.all([redis.hgetall(K.reqs), redis.hgetall(K.teams), redis.hgetall(K.settings)]);
+  const [r, t, s, v] = await Promise.all([redis.hgetall(K.reqs), redis.hgetall(K.teams), redis.hgetall(K.settings), redis.get(K.version)]);
+  let version = Number(v) || 0;
+  if (!version) { await redis.set(K.version, 1, { nx: true }); version = Number(await redis.get(K.version)) || 1; }
   return {
+    version,
     reqs: Object.entries(r || {}).map(([id, v]) => ({ ...parse(v), id })),
     teams: Object.entries(t || {}).map(([id, v]) => ({ ...parse(v), id })).sort((a, b) => (a.order ?? 99) - (b.order ?? 99)),
     settings: { eventName: str(s?.eventName), lastSummaryAt: str(s?.lastSummaryAt) },
@@ -107,6 +111,11 @@ export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store');
   if (!redis) return res.status(500).json({ error: 'Storage is not connected. Add Upstash Redis in Vercel → Storage, then redeploy.' });
   try {
+    // Cheap live check: one Redis read. The app sends the version it has; full data only when it changed.
+    if (req.method === 'GET' && req.query?.since !== undefined) {
+      const v = Number(await redis.get(K.version)) || 0;
+      if (v > 0 && String(v) === String(req.query.since)) return res.status(200).json({ changed: false, version: v });
+    }
     await ensureSeeded();
     if (req.method === 'GET') return res.status(200).json(await readAll());
     if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
@@ -117,6 +126,7 @@ export default async function handler(req, res) {
     const fn = actions[body.action];
     if (!fn) return res.status(400).json({ error: 'Unknown action' });
     await fn(body);
+    await redis.incr(K.version);
     return res.status(200).json(await readAll());
   } catch (e) {
     console.error(e);

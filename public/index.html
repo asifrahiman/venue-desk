@@ -48,6 +48,8 @@ header{position:sticky;top:0;z-index:5;background:var(--head);color:var(--head-i
 header .wrap{padding-block:12px;display:grid;gap:10px}
 .toprow{display:flex;align-items:center;justify-content:space-between;gap:10px}
 .titles{min-width:0}
+.homebtn{all:unset;cursor:pointer;-webkit-tap-highlight-color:transparent}
+.homebtn:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
 h1{font-family:var(--font-display);font-weight:700;font-size:24px;letter-spacing:.02em;text-transform:uppercase;margin:0;line-height:1.1}
 .event{font-size:13px;opacity:.8;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
 .hbtns{display:flex;gap:6px;flex:none}
@@ -166,10 +168,9 @@ nav.tabs button[aria-current="page"]{color:var(--accent)}
 <header>
   <div class="wrap">
     <div class="toprow">
-      <div class="titles"><h1>Venue Desk</h1><span class="event" id="eventName">Venue requirements</span></div>
+      <div class="titles"><h1><button type="button" id="homeBtn" class="homebtn" aria-label="Venue Desk, go to home screen">Venue Desk</button></h1><span class="event" id="eventName">Venue requirements</span></div>
       <div class="hbtns">
         <button class="hbtn" id="installBtn" type="button" hidden><svg viewBox="0 0 24 24"><path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/></svg>Install</button>
-        <button class="hbtn" id="refreshBtn" type="button" aria-label="Refresh"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg></button>
         <button class="hbtn" id="lockBtn" type="button"></button>
       </div>
     </div>
@@ -203,7 +204,7 @@ nav.tabs button[aria-current="page"]{color:var(--accent)}
 const ST=[["new","New"],["confirmed","Confirmed"],["progress","In progress"],["done","Done"],["verified","Verified on-site"],["blocked","Blocked"],["dropped","Dropped"]];
 const SL=Object.fromEntries(ST);
 const OPEN=new Set(["new","confirmed","progress","blocked"]);
-const S={reqs:[],depts:[],settings:{},tab:"reqs",filter:"open",dept:"all",q:"",teamFilter:"all",loaded:false,pin:"",busy:0,fetchedAt:null};
+const S={reqs:[],depts:[],settings:{},tab:"reqs",filter:"open",dept:"all",q:"",teamFilter:"all",loaded:false,pin:"",busy:0,fetchedAt:null,version:0,checkedAt:null,offline:false};
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const digits=p=>String(p||"").replace(/\D/g,"");
@@ -220,7 +221,7 @@ function savePin(p){try{p?localStorage.setItem("venueDeskPin",p):localStorage.re
 const ARGS={saveReq:["req"],setStatus:["id","status"],deleteReq:["id"],saveTeam:["team"],markContacted:["id"],saveSetting:["key","value"]};
 async function call(fn,...args){
   let r;
-  if(fn==="getData")r=await fetch("/api/data",{cache:"no-store"});
+  if(fn==="getData")r=await fetch("/api/data"+(args.length?"?since="+encodeURIComponent(args[0]):""),{cache:"no-store"});
   else{
     const body={action:fn,pin:args[0]};
     (ARGS[fn]||[]).forEach((k,i)=>body[k]=args[i+1]);
@@ -231,16 +232,27 @@ async function call(fn,...args){
   return fn==="checkPin"?!!j.ok:j;
 }
 function apply(data){
-  S.reqs=data.reqs||[];S.depts=data.teams||[];S.settings=data.settings||{};S.fetchedAt=new Date();S.loaded=true;
+  S.reqs=data.reqs||[];S.depts=data.teams||[];S.settings=data.settings||{};S.fetchedAt=new Date();S.checkedAt=new Date();S.loaded=true;S.offline=false;
+  if(data.version!==undefined)S.version=data.version;
   if(S.dept!=="all"&&!S.depts.some(d=>d.id===S.dept))S.dept="all";
   safeRender();
 }
 async function refresh(quiet){
-  const b=$("#refreshBtn");b.classList.add("spin");
   try{apply(await call("getData"))}
-  catch(e){if(!quiet)toast("Couldn't load. Check your connection.");$("#sync").textContent="Couldn't reach the sheet. Tap refresh to try again."}
-  finally{b.classList.remove("spin")}
+  catch(e){if(!quiet)toast("Couldn't load. Check your connection.");S.offline=true;renderHeader()}
 }
+// Live sync: asks the server "anything new?" every 5 seconds while the app is on screen.
+// That check is tiny; the full list is downloaded only when someone has changed something.
+const LIVE_MS=5000;
+async function liveCheck(){
+  if(document.visibilityState!=="visible"||S.busy||!S.loaded)return;
+  try{
+    const d=await call("getData",S.version);
+    if(d.changed===false){S.checkedAt=new Date();if(S.offline){S.offline=false}renderHeader()}
+    else apply(d);
+  }catch(e){if(!S.offline){S.offline=true;renderHeader()}}
+}
+(function loop(){setTimeout(async()=>{await liveCheck();loop()},LIVE_MS)})();
 async function write(fn,args,okMsg){
   if(!canEdit()){toast("Unlock editing first");return false}
   S.busy++;
@@ -284,7 +296,8 @@ function renderHeader(){
   $("#cDone").textContent=S.loaded?r.filter(x=>x.status==="done"||x.status==="verified").length:"–";
   $("#cPend").textContent=S.loaded?S.depts.filter(d=>respOf(d)==="pending").length:"–";
   $("#eventName").textContent=eventName()||"Venue requirements";
-  if(S.fetchedAt)$("#sync").textContent="Updated "+S.fetchedAt.toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"})+(canEdit()?"":" · View only");
+  if(S.offline)$("#sync").textContent="Offline · showing the last list. Changes will appear when you're back online.";
+  else if(S.fetchedAt)$("#sync").textContent="Live · last change seen "+S.fetchedAt.toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"})+(canEdit()?"":" · View only");
   const lb=$("#lockBtn");
   lb.innerHTML=canEdit()
     ?`<svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.5-2"/></svg>Editing`
@@ -455,7 +468,7 @@ function renderSummary(){
   <section class="panel">
     <h2>By team</h2>
     <div class="tblwrap"><table class="tbl"><thead><tr><th>Team</th><th class="n">Total</th><th class="n">Open</th><th class="n">Blocked</th><th class="n">Done</th></tr></thead>
-    <tbody>${rows.map(x=>`<tr><td>${esc(x.d.name)}${respOf(x.d)==="pending"?` <span class="resp pending">No reply</span>`:""}</td><td class="n">${x.t}</td><td class="n">${x.o}</td><td class="n" style="${x.b?"color:var(--s-blk);font-weight:700":""}">${x.b}</td><td class="n">${x.v}</td></tr>`).join("")}</tbody></table></div>
+    <tbody>${rows.map(x=>`<tr><td>${esc(x.d.name)}${respOf(x.d)==="pending"?` <span class="resp pending">No reply</span>`:respOf(x.d)==="none"?` <span class="resp none">No requirements</span>`:""}</td><td class="n">${x.t}</td><td class="n">${x.o}</td><td class="n" style="${x.b?"color:var(--s-blk);font-weight:700":""}">${x.b}</td><td class="n">${x.v}</td></tr>`).join("")}</tbody></table></div>
   </section>
   ${canEdit()?`<section class="panel">
     <h2>Event</h2>
@@ -557,14 +570,14 @@ function openUnlock(){
 
 /* ---------- events ---------- */
 document.addEventListener("click",async e=>{
-  const t=e.target.closest("[data-tab],[data-filter],[data-tfilter],[data-edit],[data-copymsg],[data-mark],[data-addfor],[data-editteam],[data-jump],[data-contacted],#copySum,#copyRep,#markSent,#saveEv,#lockBtn,#refreshBtn");
+  const t=e.target.closest("[data-tab],[data-filter],[data-tfilter],[data-edit],[data-copymsg],[data-mark],[data-addfor],[data-editteam],[data-jump],[data-contacted],#copySum,#copyRep,#markSent,#saveEv,#lockBtn,#homeBtn");
   if(!t)return;
   if(t.dataset.tab){S.tab=t.dataset.tab;render();scrollTo(0,0);return}
   if(t.dataset.filter){S.filter=t.dataset.filter;renderReqs();return}
   if(t.dataset.tfilter){S.teamFilter=t.dataset.tfilter;renderTeams();return}
   if(t.dataset.jump){if(t.dataset.jump==="teams"){S.tab="teams";S.teamFilter="pending"}else{S.tab="reqs";S.filter=t.dataset.jump}render();scrollTo(0,0);return}
   if(t.id==="lockBtn"){openUnlock();return}
-  if(t.id==="refreshBtn"){refresh(false);return}
+  if(t.id==="homeBtn"){$("#sheetHost").innerHTML="";S.tab="reqs";S.filter="open";S.dept="all";S.q="";S.teamFilter="all";render();scrollTo({top:0,behavior:"smooth"});return}
   if(t.dataset.edit){const r=S.reqs.find(x=>x.id===t.dataset.edit);if(r&&canEdit())openReqSheet(r);return}
   if(t.dataset.copymsg){const d=deptById(t.dataset.copymsg);if(d&&await copy(msgFor(d)))write("markContacted",[d.id]);return}
   if(t.dataset.contacted){write("markContacted",[t.dataset.contacted]);return}
@@ -607,9 +620,8 @@ $("#installBtn").addEventListener("click",async()=>{
 S.pin=loadPin();
 render();
 refresh(true);
-// Pick up teammates' changes: every minute while open, and whenever you come back to the app
-setInterval(()=>{if(document.visibilityState==="visible"&&!S.busy&&!$("#sheetHost").innerHTML)refresh(true)},60000);
-document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&!S.busy)refresh(true)});
+// Check straight away when you come back to the app
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")liveCheck()});
 })();
 </script>
 </body>
