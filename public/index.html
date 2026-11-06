@@ -5,6 +5,10 @@
 <meta name="theme-color" content="#13303a">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Venue Desk">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Crect width=%2232%22 height=%2232%22 rx=%227%22 fill=%22%2313303a%22/%3E%3Cpath d=%22M10 9h12M10 16h12M10 23h8%22 stroke=%22%23f0a23a%22 stroke-width=%223%22 stroke-linecap=%22round%22/%3E%3C/svg%3E">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -164,6 +168,7 @@ nav.tabs button[aria-current="page"]{color:var(--accent)}
     <div class="toprow">
       <div class="titles"><h1>Venue Desk</h1><span class="event" id="eventName">Venue requirements</span></div>
       <div class="hbtns">
+        <button class="hbtn" id="installBtn" type="button" hidden><svg viewBox="0 0 24 24"><path d="M12 4v11"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/></svg>Install</button>
         <button class="hbtn" id="refreshBtn" type="button" aria-label="Refresh"><svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg></button>
         <button class="hbtn" id="lockBtn" type="button"></button>
       </div>
@@ -582,6 +587,23 @@ $("#fab").addEventListener("click",()=>openReqSheet(null));
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&$("#sheetHost").innerHTML)closeSheet()});
 
 /* ---------- start ---------- */
+/* ---------- install as an app ---------- */
+let installEvt=null;
+const isStandalone=()=>matchMedia("(display-mode: standalone)").matches||navigator.standalone===true;
+const isIOS=/iphone|ipad|ipod/i.test(navigator.userAgent);
+if("serviceWorker" in navigator)window.addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));
+window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();installEvt=e;$("#installBtn").hidden=false});
+window.addEventListener("appinstalled",()=>{installEvt=null;$("#installBtn").hidden=true;toast("Venue Desk installed")});
+if(isIOS&&!isStandalone())$("#installBtn").hidden=false;
+$("#installBtn").addEventListener("click",async()=>{
+  if(installEvt){installEvt.prompt();const r=await installEvt.userChoice.catch(()=>null);installEvt=null;if(!r||r.outcome!=="accepted")return;$("#installBtn").hidden=true;return}
+  $("#sheetHost").innerHTML=`<div class="sheet" id="sh"><div class="box"><h3>Install on iPhone</h3>
+    <p style="margin:0">1. Open this page in <b>Safari</b>.<br>2. Tap the <b>Share</b> button at the bottom.<br>3. Choose <b>Add to Home Screen</b>, then <b>Add</b>.</p>
+    <p style="margin:0;color:var(--muted)">Venue Desk then opens full screen from its own icon, like any other app.</p>
+    <div class="sheetact"><div class="r"><button type="button" class="btn primary" id="cancel">Got it</button></div></div></div></div>`;
+  bindClose();
+});
+
 S.pin=loadPin();
 render();
 refresh(true);
