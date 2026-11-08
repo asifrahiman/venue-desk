@@ -353,14 +353,18 @@ function renderReqs(){
 const TFILTERS=[["all","All"],["pending","Not replied"],["needs","Has needs"],["none","No needs"],["stale","Not contacted 7+ days"]];
 function askText(d){
   const ev=eventName()?` for ${eventName()}`:"";
-  return `Assalamualaikum Wa Rahmatullah ${firstName(d.lead)},\nThis is the Venue team. I'm collecting venue requirements${ev} from all teams. Please share:\n1. What you need (items, power points, tables/chairs, space, AV, signage, water etc.)\n2. Quantity and where in the venue\n3. When it should be set up, and when it can be cleared\n4. Your contact person on the event day\nIf your team needs nothing at the venue, please reply "none". Thank you!`;
+  return `Assalamualaikum Wa Rahmatullah ${firstName(d.lead)},\nThis is the Venue team. I'm collecting venue requirements${ev} from all teams. Please share:\n1. What your team needs at the venue\n2. Quantity and where in the venue\n3. When it should be set up, and when it can be cleared\n4. Your contact person on the event day\nIf your team needs nothing at the venue, please reply "none". Thank you!`;
 }
 function followText(d){
   const rs=reqsOf(d.id).filter(r=>r.status!=="dropped");
   const lines=rs.map((r,i)=>`${i+1}. ${r.item}${r.qty?` × ${r.qty}`:""}${r.location?` (${r.location})`:""}: ${SL[r.status]}`);
   return `Assalamualaikum Wa Rahmatullah ${firstName(d.lead)},\nQuick check from the Venue team. This is what I have for ${d.name}:\n${lines.join("\n")||"(nothing yet)"}\nAny new or changed venue requirements? Please let me know.`;
 }
-function msgFor(d){return reqsOf(d.id).length?followText(d):askText(d)}
+function noneText(d){
+  const ev=eventName()?` for ${eventName()}`:"";
+  return `Assalamualaikum Wa Rahmatullah ${firstName(d.lead)},\nQuick check from the Venue team${ev}. Earlier you mentioned ${d.name} doesn't need anything at the venue. Is that still the case?\nIf anything has come up, please let me know what you need, how many, where, and by when. Thank you!`;
+}
+function msgFor(d){if(reqsOf(d.id).length)return followText(d);if(respOf(d)==="none")return noneText(d);return askText(d)}
 function renderTeams(){
   let ds=S.depts.slice();
   if(S.teamFilter==="stale")ds=ds.filter(stale);else if(S.teamFilter!=="all")ds=ds.filter(d=>respOf(d)===S.teamFilter);
@@ -378,7 +382,7 @@ function renderTeams(){
       <div class="teamstats"><span>${rs.length} logged</span><span>${open} open</span>${blk?`<span class="stale">${blk} blocked</span>`:""}${d.home?"":`<span class="${stale(d)?"stale":""}">${ago(d.lastContact)}</span>`}</div>
       ${d.note?`<div class="note">${esc(d.note)}</div>`:""}
       ${canEdit()?`<div class="actions">
-        ${d.home?"":`<a class="btn wa" href="${esc(waLink(d.phone,msgFor(d)))}" target="_blank" rel="noopener" data-contacted="${esc(d.id)}">${rs.length?"Follow up":"Ask"} on WhatsApp</a>
+        ${d.home?"":`<a class="btn wa" href="${esc(waLink(d.phone,msgFor(d)))}" target="_blank" rel="noopener" data-contacted="${esc(d.id)}">${rs.length||respOf(d)==="none"?"Follow up":"Ask"} on WhatsApp</a>
         <button class="btn" data-copymsg="${esc(d.id)}">Copy message</button>
         <button class="btn" data-mark="${esc(d.id)}">Contacted today</button>`}
         <button class="btn" data-addfor="${esc(d.id)}">+ Add</button>
