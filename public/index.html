@@ -131,6 +131,9 @@ pre.summary{white-space:pre-wrap;overflow-wrap:anywhere;margin:0;font-family:var
 .tbl th{font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted)}
 .tbl td.n,.tbl th.n{text-align:right}
 .tblwrap{overflow-x:auto}
+.tbl.cons td{vertical-align:top}
+.consparts{font-size:12.5px;color:var(--muted);margin-top:2px;overflow-wrap:anywhere}
+.linkbtn{background:none;border:0;padding:4px 0 0;color:var(--accent);font-weight:700;font-size:12.5px}
 
 .fab{position:fixed;right:calc(16px + env(safe-area-inset-right,0px));bottom:calc(var(--nav-h) + env(safe-area-inset-bottom,0px) + 14px);z-index:6;
   background:var(--accent);color:var(--accent-ink);border:0;border-radius:16px;padding:14px 18px;font-weight:700;font-size:15px;box-shadow:0 6px 18px rgba(0,0,0,.22)}
@@ -218,7 +221,7 @@ function savePin(p){try{p?localStorage.setItem("venueDeskPin",p):localStorage.re
 
 /* ---------- server calls ---------- */
 // Talks to /api/data on Vercel. Same call names as before: call("getData"), call("checkPin",pin), call(action,pin,...args)
-const ARGS={saveReq:["req"],setStatus:["id","status"],deleteReq:["id"],saveTeam:["team"],markContacted:["id"],saveSetting:["key","value"]};
+const ARGS={setGroup:["ids","group"],saveReq:["req"],setStatus:["id","status"],deleteReq:["id"],saveTeam:["team"],markContacted:["id"],saveSetting:["key","value"]};
 async function call(fn,...args){
   let r;
   if(fn==="getData")r=await fetch("/api/data"+(args.length?"?since="+encodeURIComponent(args[0]):""),{cache:"no-store"});
@@ -444,8 +447,63 @@ function reportText(withClosed){
   if(pend.length)L.push(`Yet to reply: ${pend.join(", ")}`);
   return L.join("\n");
 }
+/* ---------- consolidated items ---------- */
+// Same item from several teams is added up. Names are matched loosely
+// ("Chairs", "chair", "Chairs." all match); "Count as" on a requirement overrides the name.
+function normName(s){return String(s||"").toLowerCase().replace(/[^\p{L}\p{N}\s]/gu," ").replace(/\s+/g," ").trim()
+  .split(" ").map(w=>w.length>3&&w.endsWith("s")&&!w.endsWith("ss")?w.slice(0,-1):w).join(" ")}
+function qtyNum(q){const m=String(q||"").replace(/,/g,"").match(/\d+(\.\d+)?/);return m?Number(m[0]):null}
+function consolidated(){
+  const G=new Map();
+  for(const r of S.reqs){
+    if(r.status==="dropped")continue;
+    const label=(r.group||r.item||"").trim(),k=normName(label);if(!k)continue;
+    if(!G.has(k))G.set(k,{key:k,names:{},total:0,unknown:0,parts:[],open:0,done:0,ids:[]});
+    const g=G.get(k),n=qtyNum(r.qty);
+    g.names[label]=(g.names[label]||0)+1;
+    if(n===null)g.unknown++;else g.total+=n;
+    g.parts.push({dept:r.dept,qty:r.qty,n});g.ids.push(r.id);
+    if(r.status==="done"||r.status==="verified")g.done++;else g.open++;
+  }
+  const out=[...G.values()];
+  out.forEach(g=>{g.name=Object.entries(g.names).sort((a,b)=>b[1]-a[1]||a[0].length-b[0].length)[0][0];g.teams=new Set(g.parts.map(p=>p.dept)).size});
+  return out.sort((a,b)=>b.teams-a.teams||a.name.localeCompare(b.name));
+}
+function groupNames(){return consolidated().map(g=>g.name)}
+function partsText(g){return g.parts.map(p=>`${deptName(p.dept)} ${p.qty?p.qty:"(qty not given)"}`).join(", ")}
+function totalText(g){return g.total?(g.total+(g.unknown?` + ${g.unknown} without qty`:"")):"qty not given"}
+function consolidatedText(){
+  const d=new Date().toLocaleDateString(undefined,{day:"numeric",month:"short",year:"numeric"});
+  const h=homeDept(),L=[],gs=consolidated();
+  L.push(`Assalamualaikum Wa Rahmatullah${h?" "+firstName(h.lead):""},`);L.push("");
+  L.push(`*Consolidated venue requirements${eventName()?" – "+eventName():""}*`);
+  L.push(`As of ${d} · ${gs.length} item${gs.length===1?"":"s"}`);L.push("");
+  if(!gs.length)L.push("No requirements logged yet.");
+  gs.forEach((g,i)=>{L.push(`${i+1}. *${g.name}*: ${totalText(g)}${g.done?` (${g.done} of ${g.parts.length} done)`:""}`);L.push(`   ${partsText(g)}`)});
+  return L.join("\n");
+}
+function openGroupSheet(key){
+  const g=consolidated().find(x=>x.key===key);if(!g)return;
+  const others=consolidated().filter(x=>x.key!==key);
+  $("#sheetHost").innerHTML=`<div class="sheet" id="sh"><form class="box" id="grpForm">
+    <h3>Combine "${esc(g.name)}"</h3>
+    <p style="margin:0;color:var(--muted)">Choose the item these ${g.parts.length} requirement${g.parts.length>1?"s":""} should be counted as. Their own names and details stay as they are.</p>
+    <div class="field"><label for="g-into">Count as</label><select id="g-into"><option value="">Choose an item</option>${others.map(o=>`<option value="${esc(o.name)}">${esc(o.name)} (${esc(totalText(o))})</option>`).join("")}<option value="__new">New name…</option></select></div>
+    <div class="field" id="g-newwrap" hidden><label for="g-new">New name</label><input id="g-new" placeholder="e.g. Chairs"></div>
+    <div class="sheetact">${g.parts.length&&S.reqs.some(r=>g.ids.includes(r.id)&&r.group)?`<button type="button" class="btn" id="g-reset">Undo combine</button>`:""}
+      <div class="r"><button type="button" class="btn" id="cancel">Cancel</button><button class="btn primary" type="submit" id="saveBtn">Combine</button></div></div>
+  </form></div>`;
+  bindClose();
+  $("#g-into").addEventListener("change",e=>{$("#g-newwrap").hidden=e.target.value!=="__new";if(!$("#g-newwrap").hidden)$("#g-new").focus()});
+  const reset=$("#g-reset");if(reset)reset.onclick=async()=>{reset.disabled=true;if(await write("setGroup",[g.ids,""],"Combine undone"))closeSheet();else reset.disabled=false};
+  $("#grpForm").addEventListener("submit",async e=>{e.preventDefault();
+    let v=$("#g-into").value;if(v==="__new")v=$("#g-new").value.trim();if(!v)return;
+    const b=$("#saveBtn");b.disabled=true;b.textContent="Saving…";
+    if(await write("setGroup",[g.ids,v],"Combined into "+v))closeSheet();else{b.disabled=false;b.textContent="Combine"}
+  });
+}
 function renderSummary(){
-  const txt=summaryText(),home=homeDept(),rep=reportText(S.repClosed);
+  const txt=summaryText(),home=homeDept(),rep=reportText(S.repClosed),cons=consolidated(),ctext=consolidatedText();
   const rows=S.depts.map(d=>{const rs=reqsOf(d.id).filter(r=>r.status!=="dropped");return {d,t:rs.length,o:rs.filter(r=>OPEN.has(r.status)).length,b:rs.filter(r=>r.status==="blocked").length,v:rs.filter(r=>r.status==="done"||r.status==="verified").length}});
   const last=S.settings.lastSummaryAt?new Date(S.settings.lastSummaryAt).toLocaleString(undefined,{day:"numeric",month:"short",hour:"numeric",minute:"2-digit"}):"never";
   $("#view").innerHTML=`
@@ -457,6 +515,18 @@ function renderSummary(){
       ${home&&canEdit()?`<a class="btn wa" href="${esc(waLink(home.phone,txt))}" target="_blank" rel="noopener">Send to ${esc(firstName(home.lead))} on WhatsApp</a>`:""}
       <button class="btn" id="copySum">Copy</button>
       ${canEdit()?`<button class="btn primary" id="markSent">Mark as sent</button>`:""}
+    </div>
+  </section>
+  <section class="panel">
+    <h2>Consolidated items</h2>
+    <p>Total of each item across all teams. Dropped items are left out.${canEdit()?" If the same thing is named differently (e.g. Dustbins and Trash cans), tap <b>Combine</b>.":""}</p>
+    ${cons.length?`<div class="tblwrap"><table class="tbl cons"><thead><tr><th>Item</th><th class="n">Total</th></tr></thead><tbody>${cons.map(g=>`<tr>
+      <td><b>${esc(g.name)}</b>${g.done?` <span class="resp none">${g.done}/${g.parts.length} done</span>`:""}<div class="consparts">${esc(partsText(g))}</div>
+        ${canEdit()?`<button type="button" class="linkbtn" data-group="${esc(g.key)}">Combine</button>`:""}</td>
+      <td class="n"><b>${g.total||"–"}</b>${g.unknown?`<div class="consparts">+${g.unknown} no qty</div>`:""}</td></tr>`).join("")}</tbody></table></div>`:`<div class="empty"><b>No requirements yet</b></div>`}
+    <div class="actions">
+      ${home&&canEdit()?`<a class="btn wa" href="${esc(waLink(home.phone,ctext))}" target="_blank" rel="noopener">Send totals to ${esc(firstName(home.lead))}</a>`:""}
+      <button class="btn" id="copyCons">Copy</button>
     </div>
   </section>
   <section class="panel">
@@ -504,6 +574,8 @@ function openReqSheet(r,presetDept){
     <div class="field"><label for="f-dept">Team</label><select id="f-dept" required><option value="">Choose team</option>${opts}</select></div>
     <div class="hintbox" id="f-hint" hidden></div>
     <div class="field"><label for="f-item">What is needed</label><input id="f-item" required value="${esc(r.item||"")}" placeholder="e.g. Power extension boards"></div>
+    <div class="field"><label for="f-group">Count as (for consolidated totals)</label><input id="f-group" list="groupList" value="${esc(r.group||"")}" placeholder="Leave blank to use the item name">
+      <datalist id="groupList">${groupNames().map(n=>`<option value="${esc(n)}"></option>`).join("")}</datalist></div>
     <div class="row2"><div class="field"><label for="f-qty">Quantity / spec</label><input id="f-qty" value="${esc(r.qty||"")}" placeholder="e.g. 4, 6-socket"></div>
       <div class="field"><label for="f-loc">Where</label><input id="f-loc" value="${esc(r.location||"")}" placeholder="e.g. Registration desk"></div></div>
     <div class="row2"><div class="field"><label for="f-due">Needed by</label><input id="f-due" type="datetime-local" value="${esc(r.neededBy||"")}"></div>
@@ -520,7 +592,7 @@ function openReqSheet(r,presetDept){
     e.target.disabled=true;if(await write("deleteReq",[r.id],"Deleted"))closeSheet();else e.target.disabled=false}}
   $("#reqForm").addEventListener("submit",async e=>{e.preventDefault();
     const body={id:isNew?"":r.id,dept:$("#f-dept").value,item:$("#f-item").value.trim(),qty:$("#f-qty").value.trim(),location:$("#f-loc").value.trim(),
-      neededBy:$("#f-due").value,owner:$("#f-owner").value.trim(),status:$("#f-status").value,budget:$("#f-budget").checked,notes:$("#f-notes").value.trim()};
+      neededBy:$("#f-due").value,owner:$("#f-owner").value.trim(),group:$("#f-group").value.trim(),status:$("#f-status").value,budget:$("#f-budget").checked,notes:$("#f-notes").value.trim()};
     if(!body.dept||!body.item)return;
     const b=$("#saveBtn");b.disabled=true;b.textContent="Saving…";
     if(await write("saveReq",[body],isNew?"Added":"Saved"))closeSheet();else{b.disabled=false;b.textContent=isNew?"Add":"Save"}
@@ -574,7 +646,7 @@ function openUnlock(){
 
 /* ---------- events ---------- */
 document.addEventListener("click",async e=>{
-  const t=e.target.closest("[data-tab],[data-filter],[data-tfilter],[data-edit],[data-copymsg],[data-mark],[data-addfor],[data-editteam],[data-jump],[data-contacted],#copySum,#copyRep,#markSent,#saveEv,#lockBtn,#homeBtn");
+  const t=e.target.closest("[data-tab],[data-filter],[data-tfilter],[data-edit],[data-copymsg],[data-mark],[data-addfor],[data-editteam],[data-jump],[data-contacted],#copySum,#copyRep,#copyCons,[data-group],#markSent,#saveEv,#lockBtn,#homeBtn");
   if(!t)return;
   if(t.dataset.tab){S.tab=t.dataset.tab;render();scrollTo(0,0);return}
   if(t.dataset.filter){S.filter=t.dataset.filter;renderReqs();return}
@@ -590,6 +662,8 @@ document.addEventListener("click",async e=>{
   if(t.dataset.editteam){const d=deptById(t.dataset.editteam);if(d)openTeamSheet(d);return}
   if(t.id==="copySum"){copy(summaryText());return}
   if(t.id==="copyRep"){copy(reportText(S.repClosed));return}
+  if(t.id==="copyCons"){copy(consolidatedText());return}
+  if(t.dataset.group!==undefined){if(canEdit())openGroupSheet(t.dataset.group);return}
   if(t.id==="markSent"){write("saveSetting",["lastSummaryAt",new Date().toISOString()],"Marked as sent");return}
   if(t.id==="saveEv"){const v=$("#evName").value.trim();$("#evName").blur();write("saveSetting",["eventName",v],"Saved");return}
 });

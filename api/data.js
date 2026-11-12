@@ -66,7 +66,7 @@ const actions = {
     const prev = (await getOne(K.reqs, id)) || {};
     const r = {
       dept: str(req.dept, 60), item: str(req.item, 200), qty: str(req.qty, 100), location: str(req.location, 200),
-      neededBy: str(req.neededBy, 20), owner: str(req.owner, 100),
+      neededBy: str(req.neededBy, 20), owner: str(req.owner, 100), group: str(req.group, 100),
       status: STATUSES.includes(req.status) ? req.status : 'new', budget: !!req.budget, notes: str(req.notes, 1000),
       created: prev.created || now, updated: now,
     };
@@ -77,6 +77,15 @@ const actions = {
       const t = await getOne(K.teams, r.dept);
       if (t && !t.home && t.response !== 'needs') await redis.hset(K.teams, { [r.dept]: JSON.stringify({ ...t, response: 'needs' }) });
     }
+  },
+  // Count several requirements as the same item in the consolidated totals
+  async setGroup({ ids, group }) {
+    const list = (Array.isArray(ids) ? ids : []).slice(0, 200).map((x) => str(x, 60)).filter(Boolean);
+    if (!list.length) return;
+    const now = new Date().toISOString(), g = str(group, 100), upd = {};
+    const vals = await Promise.all(list.map((id) => getOne(K.reqs, id)));
+    vals.forEach((r, i) => { if (r) upd[list[i]] = JSON.stringify({ ...r, group: g, updated: now }); });
+    if (Object.keys(upd).length) await redis.hset(K.reqs, upd);
   },
   async setStatus({ id, status }) {
     const r = await getOne(K.reqs, str(id, 60));
