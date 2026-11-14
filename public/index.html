@@ -566,6 +566,8 @@ function safeRender(){
 /* ---------- sheets (forms) ---------- */
 function closeSheet(){$("#sheetHost").innerHTML="";render()}
 function bindClose(){$("#cancel").onclick=closeSheet;$("#sh").addEventListener("click",e=>{if(e.target.id==="sh")closeSheet()})}
+// New requirements default to the event day, 28 Nov 2026 at 12:00 pm
+const DEFAULT_DUE="2026-11-28T12:00";
 function openReqSheet(r,presetDept){
   const isNew=!r;r=r||{dept:presetDept||(S.dept!=="all"?S.dept:""),status:"new"};
   const opts=S.depts.map(d=>`<option value="${esc(d.id)}"${r.dept===d.id?" selected":""}>${esc(d.name)}</option>`).join("");
@@ -578,7 +580,7 @@ function openReqSheet(r,presetDept){
       <datalist id="groupList">${groupNames().map(n=>`<option value="${esc(n)}"></option>`).join("")}</datalist></div>
     <div class="row2"><div class="field"><label for="f-qty">Quantity / spec</label><input id="f-qty" value="${esc(r.qty||"")}" placeholder="e.g. 4, 6-socket"></div>
       <div class="field"><label for="f-loc">Where</label><input id="f-loc" value="${esc(r.location||"")}" placeholder="e.g. Registration desk"></div></div>
-    <div class="row2"><div class="field"><label for="f-due">Needed by</label><input id="f-due" type="datetime-local" value="${esc(r.neededBy||"")}"></div>
+    <div class="row2"><div class="field"><label for="f-due">Needed by</label><input id="f-due" type="datetime-local" value="${esc(isNew?(r.neededBy||DEFAULT_DUE):(r.neededBy||""))}"></div>
       <div class="field"><label for="f-owner">Owner (venue team)</label><input id="f-owner" value="${esc(r.owner||"")}" placeholder="Who will arrange it"></div></div>
     <div class="field"><label for="f-status">Status</label><select id="f-status">${ST.map(([v,l])=>`<option value="${v}"${v===r.status?" selected":""}>${l}</option>`).join("")}</select></div>
     <label class="check"><input type="checkbox" id="f-budget"${r.budget?" checked":""}> Needs budget approval from Finance</label>
